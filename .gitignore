@@ -3,3 +3,4 @@ data
 model.json
 model.h5
 .ipynb_checkpoints
+__pycache__

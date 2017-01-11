@@ -1,6 +1,4 @@
 data
 .DS_Store
-model.json
-model.h5
 .ipynb_checkpoints
 __pycache__

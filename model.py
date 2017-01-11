@@ -10,7 +10,7 @@ from keras.layers import Dense, Dropout, Flatten, Lambda, ELU, Activation, Conv2
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.layers.normalization import BatchNormalization 
 
-def rgb_clahe(bgr_img,limit=20,grid=4):
+def rgb_clahe(bgr_img,limit=20,grid=8):
     b,g,r = cv2.split(bgr_img)
     clahe = cv2.createCLAHE(clipLimit=limit, tileGridSize=(grid,grid))
     b = clahe.apply(b)
@@ -25,7 +25,7 @@ def preprocess(img):
   resize = (resize / 127.5) - 1.0
   return resize
 
-def random_camera(row, angle=.15):
+def random_camera(row, angle=.25):
   camera = np.random.randint(3)
   if camera == 0:
     image = mpimg.imread('data/'+row.left.strip())
@@ -43,7 +43,7 @@ def random_flip(image, steering):
     image, steering = cv2.flip(image,1), -steering
   return image,steering
 
-def random_translation(image, steering, x_range=100, y_range=10, angle=.3):
+def random_translation(image, steering, x_range=100, y_range=10, angle=.4):
   rows, cols, _ = image.shape
   x = x_range * np.random.uniform() - x_range / 2
   steering = steering + (x / x_range * 2 * angle)
@@ -205,7 +205,7 @@ if __name__ == '__main__':
   data = prepare_data(csv)
 
   # get model
-  model = get_my_model()
+  model = get_comma_model()
   model.summary()
 
   # training

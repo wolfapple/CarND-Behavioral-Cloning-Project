@@ -6,10 +6,11 @@ import cv2
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten, Lambda, ELU
+from keras.layers import Dense, Dropout, Flatten, Lambda, ELU, Activation, Conv2D
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
+from keras.layers.normalization import BatchNormalization 
 
-def rgb_clahe(bgr_img,limit=3,grid=4):
+def rgb_clahe(bgr_img,limit=20,grid=4):
     b,g,r = cv2.split(bgr_img)
     clahe = cv2.createCLAHE(clipLimit=limit, tileGridSize=(grid,grid))
     b = clahe.apply(b)
@@ -24,7 +25,7 @@ def preprocess(img):
   resize = (resize / 127.5) - 1.0
   return resize
 
-def random_camera(row, angle=.2):
+def random_camera(row, angle=.15):
   camera = np.random.randint(3)
   if camera == 0:
     image = mpimg.imread('data/'+row.left.strip())
@@ -42,7 +43,7 @@ def random_flip(image, steering):
     image, steering = cv2.flip(image,1), -steering
   return image,steering
 
-def random_translation(image, steering, x_range=100, y_range=20, angle=.3):
+def random_translation(image, steering, x_range=100, y_range=10, angle=.3):
   rows, cols, _ = image.shape
   x = x_range * np.random.uniform() - x_range / 2
   steering = steering + (x / x_range * 2 * angle)
@@ -100,30 +101,71 @@ def prepare_data(data):
   data = data[data.throttle != 0]
   return shuffle(data)
 
-def get_model():
+def get_nvidia_model():
   model = Sequential()
-  model.add(Convolution2D(3,1,1,  border_mode='valid', name='conv0', init='he_normal', input_shape=(64,64,3)))
+  model.add(Convolution2D(24, 5, 5, init = 'he_normal', subsample= (2, 2), name='conv1_1', input_shape=(64, 64, 3)))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(36, 5, 5, init = 'he_normal', subsample= (2, 2), name='conv2_1'))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(48, 5, 5, init = 'he_normal', subsample= (2, 2), name='conv3_1'))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(64, 3, 3, init = 'he_normal', subsample= (1, 1), name='conv4_1'))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(64, 3, 3, init = 'he_normal', subsample= (1, 1), name='conv4_2'))
+  model.add(Activation('relu'))
+  model.add(Flatten())
+  model.add(Dense(1164, init = 'he_normal', name = "dense_0"))
+  model.add(Activation('relu'))
+  model.add(Dropout(.5))
+  model.add(Dense(100, init = 'he_normal',  name = "dense_1"))
+  model.add(Activation('relu'))
+  model.add(Dropout(.5))
+  model.add(Dense(50, init = 'he_normal', name = "dense_2"))
+  model.add(Activation('relu'))
+  model.add(Dropout(.5))
+  model.add(Dense(10, init = 'he_normal', name = "dense_3"))
+  model.add(Activation('relu'))
+  model.add(Dense(1, init = 'he_normal', name = "dense_4"))
+  return model
+
+def get_comma_model():
+  model = Sequential()
+  model.add(Convolution2D(16, 8, 8, subsample=(4, 4), border_mode="same", input_shape=(64, 64, 3)))
+  model.add(ELU())
+  model.add(Convolution2D(32, 5, 5, subsample=(2, 2), border_mode="same"))
+  model.add(ELU())
+  model.add(Convolution2D(64, 5, 5, subsample=(2, 2), border_mode="same"))
+  model.add(Flatten())
+  model.add(Dropout(.2))
+  model.add(ELU())
+  model.add(Dense(512))
+  model.add(Dropout(.5))
+  model.add(ELU())
+  model.add(Dense(1))
+  return model
+
+def get_vivek_model():
+  model = Sequential()
+  model.add(Convolution2D(3,1,1, border_mode='valid', name='conv0', init='he_normal', input_shape=(64, 64, 3)))
+  model.add(ELU())
   model.add(Convolution2D(32,3,3, border_mode='valid', name='conv1', init='he_normal'))
   model.add(ELU())
   model.add(Convolution2D(32,3,3, border_mode='valid', name='conv2', init='he_normal'))
   model.add(ELU())
   model.add(MaxPooling2D(pool_size=(2,2)))
   model.add(Dropout(0.5))
-  
   model.add(Convolution2D(64,3,3, border_mode='valid', name='conv3', init='he_normal'))
   model.add(ELU())
   model.add(Convolution2D(64,3,3, border_mode='valid', name='conv4', init='he_normal'))
   model.add(ELU())
   model.add(MaxPooling2D(pool_size=(2,2)))
   model.add(Dropout(0.5))
-  
   model.add(Convolution2D(128,3,3, border_mode='valid', name='conv5', init='he_normal'))
   model.add(ELU())
   model.add(Convolution2D(128,3,3, border_mode='valid', name='conv6', init='he_normal'))
   model.add(ELU())
   model.add(MaxPooling2D(pool_size=(2,2)))
   model.add(Dropout(0.5))
-  
   model.add(Flatten())
   model.add(Dense(512,name='hidden1', init='he_normal'))
   model.add(ELU())
@@ -134,7 +176,27 @@ def get_model():
   model.add(Dense(16,name='hidden3',init='he_normal'))
   model.add(ELU())
   model.add(Dropout(0.5))
-  model.add(Dense(1, name='output', init='he_normal'))  
+  model.add(Dense(1, name='output', init='he_normal'))
+  return model
+
+def get_my_model():
+  model = Sequential()
+  model.add(Convolution2D(3,1,1, border_mode='valid', init='he_normal', input_shape=(64, 64, 3)))
+  model.add(ELU())
+  model.add(Conv2D(100, 5, 5, border_mode='valid', activation='relu'))
+  model.add(MaxPooling2D(pool_size=(2,2)))
+  model.add(Conv2D(150, 3, 3, border_mode='valid', activation='relu'))
+  model.add(MaxPooling2D(pool_size=(2,2)))
+  model.add(Conv2D(250, 2, 2, border_mode='valid', activation='relu'))
+  model.add(MaxPooling2D(pool_size=(2,2)))
+  model.add(Flatten())
+  model.add(Dense(300, init='he_normal'))
+  model.add(ELU())
+  model.add(Dropout(0.5))
+  model.add(Dense(43, init='he_normal'))
+  model.add(ELU())
+  model.add(Dropout(0.5))
+  model.add(Dense(1, init='he_normal'))
   return model
 
 if __name__ == '__main__':
@@ -143,12 +205,12 @@ if __name__ == '__main__':
   data = prepare_data(csv)
 
   # get model
-  model = get_model()
+  model = get_my_model()
   model.summary()
 
   # training
   BATCH_SIZE = 128
-  EPOCH = 10
+  EPOCH = 5
   SAMPLES = BATCH_SIZE * 200
   NB_VAL_SAMPLES = round(len(data) / BATCH_SIZE) * BATCH_SIZE
 

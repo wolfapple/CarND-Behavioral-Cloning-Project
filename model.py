@@ -9,6 +9,7 @@ from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Flatten, Lambda, ELU, Activation, Conv2D, merge, Input
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.layers.normalization import BatchNormalization
+from keras.optimizers import Adam
 
 def rgb_clahe(bgr_img,limit=5,grid=4):
   b,g,r = cv2.split(bgr_img)
@@ -22,10 +23,9 @@ def preprocess(img):
   roi = img[60:140, :, :]
   clahe = rgb_clahe(roi)
   resize = cv2.resize(clahe, (64, 64), interpolation=cv2.INTER_AREA)
-  resize = (resize / 127.5) - 1.0
   return resize
 
-def random_camera(row, angle=.25):
+def random_camera(row, angle=.15):
   camera = np.random.randint(3)
   if camera == 0:
     image = mpimg.imread('data/'+row.left.strip())
@@ -36,14 +36,14 @@ def random_camera(row, angle=.25):
   else:
     image = mpimg.imread('data/'+row.right.strip())
     steering = row.steering - angle
-  return image, steering
+  return camera, image, steering
 
 def random_flip(image, steering):
   if np.random.randint(2) == 0:
     image, steering = cv2.flip(image,1), -steering
-  return image,steering
+  return image, steering
 
-def random_translation(image, steering, x_range=100, y_range=10, angle=.4):
+def random_translation(image, steering, x_range=100, y_range=10, angle=.3):
   rows, cols, _ = image.shape
   x = x_range * np.random.uniform() - x_range / 2
   steering = steering + (x / x_range * 2 * angle)
@@ -53,9 +53,10 @@ def random_translation(image, steering, x_range=100, y_range=10, angle=.4):
   return image, steering
 
 def get_augmented_data(row):
-  image, steering = random_camera(row)
-  image, steering = random_flip(image, steering)
-  image, steering = random_translation(image, steering)
+  camera, image, steering = random_camera(row)
+  if camera == 1:
+    image, steering = random_flip(image, steering)
+    image, steering = random_translation(image, steering)
   return preprocess(image), steering
 
 def generate_train_batch(data, batch_size):
@@ -98,6 +99,8 @@ def prepare_data(data):
 
 def get_nvidia_model():
   model = Sequential()
+  model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(64, 64, 3), output_shape=(64, 64, 3)))
+  model.add(Convolution2D(3, 1, 1, border_mode='same'))
   model.add(Convolution2D(24, 5, 5, init = 'he_normal', subsample= (2, 2), input_shape=(64, 64, 3)))
   model.add(ELU())
   model.add(Convolution2D(36, 5, 5, init = 'he_normal', subsample= (2, 2)))
@@ -122,7 +125,9 @@ def get_nvidia_model():
 
 def get_comma_model():
   model = Sequential()
-  model.add(Convolution2D(16, 8, 8, subsample=(4, 4), border_mode="same", input_shape=(64, 64, 3)))
+  model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(64, 64, 3), output_shape=(64, 64, 3)))
+  model.add(Convolution2D(3, 1, 1, border_mode='same'))
+  model.add(Convolution2D(16, 8, 8, subsample=(4, 4), border_mode="same"))
   model.add(ELU())
   model.add(Convolution2D(32, 5, 5, subsample=(2, 2), border_mode="same"))
   model.add(ELU())
@@ -136,53 +141,25 @@ def get_comma_model():
   model.add(Dense(1))
   return model
 
-def splittensor(axis=1, ratio_split=1, id_split=0,**kwargs):
-    def f(X):
-        div = X.get_shape()[axis].value // ratio_split
-
-        if axis == 0:
-            output =  X[id_split*div:(id_split+1)*div,:,:,:]
-        elif axis == 1:
-            output =  X[:, id_split*div:(id_split+1)*div, :, :]
-        elif axis == 2:
-            output = X[:,:,id_split*div:(id_split+1)*div,:]
-        elif axis == 3:
-            output = X[:,:,:,id_split*div:(id_split+1)*div]
-        else:
-            raise ValueError("This axis is not possible")
-
-        return output
-
-    def g(input_shape):
-        output_shape=list(input_shape)
-        output_shape[axis] = output_shape[axis] // ratio_split
-        return tuple(output_shape)
-
-    return Lambda(f,output_shape=lambda input_shape:g(input_shape),**kwargs)
-
-def convolution2Dgroup(n_group, nb_filter, nb_row, nb_col, **kwargs):
-    def f(input):
-        return merge([
-            Convolution2D(nb_filter//n_group,nb_row,nb_col, subsample=(1, 1), border_mode="same", activation="relu")(
-                splittensor(axis=1,
-                            ratio_split=n_group,
-                            id_split=i)(input))
-            for i in range(n_group)
-        ],mode='concat',concat_axis=1)
-
-    return f
-
 def get_gtanet_model():
-  inputs = Input(shape=(64,64,3))
-  conv1 = Convolution2D(96, 11, 11, subsample=(4, 4), border_mode="same", activation="relu")(inputs)
+  inputs = Input(shape=(64, 64, 3))
+  norm = Lambda(lambda x: x/127.5 - 1., output_shape=(64, 64, 3))
+  color = Convolution2D(3, 1, 1, border_mode='same')(norm)
+  conv1 = Convolution2D(96, 11, 11, subsample=(4, 4), border_mode="same", activation="relu")(color)
   conv1 = BatchNormalization()(conv1)
   conv1 = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), border_mode="valid")(conv1)
-  conv2 = convolution2Dgroup(2, 255, 5, 5)(conv1)
+  conv2_1 = Convolution2D(255//2, 5, 5, subsample=(1, 1), border_mode="same", activation="relu")(conv1)
+  conv2_2 = Convolution2D(255//2, 5, 5, subsample=(1, 1), border_mode="same", activation="relu")(conv1)
+  conv2 = merge([conv2_1, conv2_2], mode="concat", concat_axis=3)
   conv2 = BatchNormalization()(conv2)
   conv2 = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), border_mode="valid")(conv2)
   conv3 = Convolution2D(384, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")(conv2)
-  conv4 = convolution2Dgroup(2, 384, 3, 3)(conv3)
-  conv5 = convolution2Dgroup(2, 256, 3, 3)(conv4)
+  conv4_1 = Convolution2D(384//2, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")(conv3)
+  conv4_2 = Convolution2D(384//2, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")(conv3)
+  conv4 = merge([conv4_1, conv4_2], mode="concat", concat_axis=3)
+  conv5_1 = Convolution2D(256//2, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")(conv4)
+  conv5_2 = Convolution2D(256//2, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")(conv4)
+  conv5 = merge([conv5_1, conv5_2], mode="concat", concat_axis=3)
   conv5 = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), border_mode="valid")(conv5)
   flat = Flatten()(conv5)
   dense1 = Dense(4096, activation="relu")(flat)
@@ -193,35 +170,13 @@ def get_gtanet_model():
   model = Model(input=inputs, output=output)
   return model
 
-  # model = Sequential()
-  # model.add(Convolution2D(96, 11, 11, subsample=(4, 4), border_mode="same", activation="relu", input_shape=(64, 64, 3))) # g1
-  # model.add(BatchNormalization())
-  # model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="valid"))
-  # model.add(Convolution2D(255, 5, 5, subsample=(1, 1), border_mode="same", activation="relu")) # g2
-  # model.add(BatchNormalization())
-  # model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="valid"))
-  # model.add(Convolution2D(384, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")) # g1
-  # model.add(Convolution2D(384, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")) # g2
-  # model.add(Convolution2D(256, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")) # g2
-  # model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="valid"))
-  # model.add(Flatten())
-  # model.add(Dense(4096))
-  # model.add(Activation('relu'))
-  # model.add(Dropout(0.5))
-  # model.add(Dense(4096))
-  # model.add(Activation('relu'))
-  # model.add(Dropout(0.95))
-  # model.add(Dense(1))
-  # return model
-
-
-if __name__ == '__main__':
+def main():
   # prepare data
   csv = read_csv('data/driving_log.csv')
   data = prepare_data(csv)
 
   # get model
-  model = get_gtanet_model()
+  model = get_comma_model()
   model.summary()
 
   # training
@@ -230,8 +185,7 @@ if __name__ == '__main__':
   SAMPLES = BATCH_SIZE * 200
   NB_VAL_SAMPLES = round(len(data) / BATCH_SIZE) * BATCH_SIZE
 
-  # lr = 2e-4
-  model.compile(optimizer='adam', loss='mse')
+  model.compile(optimizer=Adam(2e-4), loss='mse')
   model.fit_generator(generate_train_batch(data, BATCH_SIZE), verbose=1, samples_per_epoch=SAMPLES, nb_epoch=EPOCH,
     validation_data=generate_valid_batch(data, BATCH_SIZE), nb_val_samples=NB_VAL_SAMPLES)
 
@@ -239,3 +193,6 @@ if __name__ == '__main__':
   model.save_weights('model.h5')
   with open('model.json', 'w') as f:
     f.write(model.to_json())
+
+if __name__ == '__main__':
+  main()

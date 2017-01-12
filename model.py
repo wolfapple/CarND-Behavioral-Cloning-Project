@@ -5,21 +5,21 @@ import cv2
 
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten, Lambda, ELU, Activation, Conv2D
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Flatten, Lambda, ELU, Activation, Conv2D, merge, Input
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
-from keras.layers.normalization import BatchNormalization 
+from keras.layers.normalization import BatchNormalization
 
-def rgb_clahe(bgr_img,limit=20,grid=8):
-    b,g,r = cv2.split(bgr_img)
-    clahe = cv2.createCLAHE(clipLimit=limit, tileGridSize=(grid,grid))
-    b = clahe.apply(b)
-    g = clahe.apply(g)
-    r = clahe.apply(r)
-    return cv2.merge([b,g,r])
+def rgb_clahe(bgr_img,limit=5,grid=4):
+  b,g,r = cv2.split(bgr_img)
+  clahe = cv2.createCLAHE(clipLimit=limit, tileGridSize=(grid,grid))
+  b = clahe.apply(b)
+  g = clahe.apply(g)
+  r = clahe.apply(r)
+  return cv2.merge([b,g,r])
 
 def preprocess(img):
-  roi = img[65:135, :, :]
+  roi = img[60:140, :, :]
   clahe = rgb_clahe(roi)
   resize = cv2.resize(clahe, (64, 64), interpolation=cv2.INTER_AREA)
   resize = (resize / 127.5) - 1.0
@@ -51,14 +51,6 @@ def random_translation(image, steering, x_range=100, y_range=10, angle=.4):
   M = np.float32([[1,0,x], [0,1,y]])
   image = cv2.warpAffine(image, M, (cols, rows))
   return image, steering
-
-def random_rotation(image, steering, ang_range=10):
-  ang_rot = np.random.uniform(ang_range) - ang_range / 2
-  rows, cols, _ = img.shape
-  M = cv2.getRotationMatrix2D((cols/2,rows/2), ang_rot, 1)
-  image = cv2.warpAffine(image, M, (cols,rows))
-  steering = steering + 0
-  return image,steering
 
 def get_augmented_data(row):
   image, steering = random_camera(row)
@@ -98,34 +90,34 @@ def read_csv(path):
   return pd.read_csv(path, names=headers, skiprows=1)
 
 def prepare_data(data):
-  data = data[data.throttle != 0]
-  return shuffle(data)
+  data = data[data.speed > 15]
+  train_nonzero = data[data.steering != 0]
+  train_zero = (data[data.steering == 0]).sample(frac=.1)
+  train = pd.concat([train_nonzero, train_zero], ignore_index=True)
+  return shuffle(train)
 
 def get_nvidia_model():
   model = Sequential()
-  model.add(Convolution2D(24, 5, 5, init = 'he_normal', subsample= (2, 2), name='conv1_1', input_shape=(64, 64, 3)))
-  model.add(Activation('relu'))
-  model.add(Convolution2D(36, 5, 5, init = 'he_normal', subsample= (2, 2), name='conv2_1'))
-  model.add(Activation('relu'))
-  model.add(Convolution2D(48, 5, 5, init = 'he_normal', subsample= (2, 2), name='conv3_1'))
-  model.add(Activation('relu'))
-  model.add(Convolution2D(64, 3, 3, init = 'he_normal', subsample= (1, 1), name='conv4_1'))
-  model.add(Activation('relu'))
-  model.add(Convolution2D(64, 3, 3, init = 'he_normal', subsample= (1, 1), name='conv4_2'))
-  model.add(Activation('relu'))
+  model.add(Convolution2D(24, 5, 5, init = 'he_normal', subsample= (2, 2), input_shape=(64, 64, 3)))
+  model.add(ELU())
+  model.add(Convolution2D(36, 5, 5, init = 'he_normal', subsample= (2, 2)))
+  model.add(ELU())
+  model.add(Convolution2D(48, 5, 5, init = 'he_normal', subsample= (2, 2)))
+  model.add(ELU())
+  model.add(Convolution2D(64, 3, 3, init = 'he_normal', subsample= (1, 1)))
+  model.add(ELU())
+  model.add(Convolution2D(64, 3, 3, init = 'he_normal', subsample= (1, 1)))
+  model.add(ELU())
   model.add(Flatten())
-  model.add(Dense(1164, init = 'he_normal', name = "dense_0"))
-  model.add(Activation('relu'))
-  model.add(Dropout(.5))
-  model.add(Dense(100, init = 'he_normal',  name = "dense_1"))
-  model.add(Activation('relu'))
-  model.add(Dropout(.5))
-  model.add(Dense(50, init = 'he_normal', name = "dense_2"))
-  model.add(Activation('relu'))
-  model.add(Dropout(.5))
-  model.add(Dense(10, init = 'he_normal', name = "dense_3"))
-  model.add(Activation('relu'))
-  model.add(Dense(1, init = 'he_normal', name = "dense_4"))
+  model.add(Dense(1164, init = 'he_normal'))
+  model.add(ELU())
+  model.add(Dense(100, init = 'he_normal'))
+  model.add(ELU())
+  model.add(Dense(50, init = 'he_normal'))
+  model.add(ELU())
+  model.add(Dense(10, init = 'he_normal'))
+  model.add(ELU())
+  model.add(Dense(1, init = 'he_normal'))
   return model
 
 def get_comma_model():
@@ -144,60 +136,84 @@ def get_comma_model():
   model.add(Dense(1))
   return model
 
-def get_vivek_model():
-  model = Sequential()
-  model.add(Convolution2D(3,1,1, border_mode='valid', name='conv0', init='he_normal', input_shape=(64, 64, 3)))
-  model.add(ELU())
-  model.add(Convolution2D(32,3,3, border_mode='valid', name='conv1', init='he_normal'))
-  model.add(ELU())
-  model.add(Convolution2D(32,3,3, border_mode='valid', name='conv2', init='he_normal'))
-  model.add(ELU())
-  model.add(MaxPooling2D(pool_size=(2,2)))
-  model.add(Dropout(0.5))
-  model.add(Convolution2D(64,3,3, border_mode='valid', name='conv3', init='he_normal'))
-  model.add(ELU())
-  model.add(Convolution2D(64,3,3, border_mode='valid', name='conv4', init='he_normal'))
-  model.add(ELU())
-  model.add(MaxPooling2D(pool_size=(2,2)))
-  model.add(Dropout(0.5))
-  model.add(Convolution2D(128,3,3, border_mode='valid', name='conv5', init='he_normal'))
-  model.add(ELU())
-  model.add(Convolution2D(128,3,3, border_mode='valid', name='conv6', init='he_normal'))
-  model.add(ELU())
-  model.add(MaxPooling2D(pool_size=(2,2)))
-  model.add(Dropout(0.5))
-  model.add(Flatten())
-  model.add(Dense(512,name='hidden1', init='he_normal'))
-  model.add(ELU())
-  model.add(Dropout(0.5))
-  model.add(Dense(64,name='hidden2', init='he_normal'))
-  model.add(ELU())
-  model.add(Dropout(0.5))
-  model.add(Dense(16,name='hidden3',init='he_normal'))
-  model.add(ELU())
-  model.add(Dropout(0.5))
-  model.add(Dense(1, name='output', init='he_normal'))
+def splittensor(axis=1, ratio_split=1, id_split=0,**kwargs):
+    def f(X):
+        div = X.get_shape()[axis].value // ratio_split
+
+        if axis == 0:
+            output =  X[id_split*div:(id_split+1)*div,:,:,:]
+        elif axis == 1:
+            output =  X[:, id_split*div:(id_split+1)*div, :, :]
+        elif axis == 2:
+            output = X[:,:,id_split*div:(id_split+1)*div,:]
+        elif axis == 3:
+            output = X[:,:,:,id_split*div:(id_split+1)*div]
+        else:
+            raise ValueError("This axis is not possible")
+
+        return output
+
+    def g(input_shape):
+        output_shape=list(input_shape)
+        output_shape[axis] = output_shape[axis] // ratio_split
+        return tuple(output_shape)
+
+    return Lambda(f,output_shape=lambda input_shape:g(input_shape),**kwargs)
+
+def convolution2Dgroup(n_group, nb_filter, nb_row, nb_col, **kwargs):
+    def f(input):
+        return merge([
+            Convolution2D(nb_filter//n_group,nb_row,nb_col, subsample=(1, 1), border_mode="same", activation="relu")(
+                splittensor(axis=1,
+                            ratio_split=n_group,
+                            id_split=i)(input))
+            for i in range(n_group)
+        ],mode='concat',concat_axis=1)
+
+    return f
+
+def get_gtanet_model():
+  inputs = Input(shape=(64,64,3))
+  conv1 = Convolution2D(96, 11, 11, subsample=(4, 4), border_mode="same", activation="relu")(inputs)
+  conv1 = BatchNormalization()(conv1)
+  conv1 = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), border_mode="valid")(conv1)
+  conv2 = convolution2Dgroup(2, 255, 5, 5)(conv1)
+  conv2 = BatchNormalization()(conv2)
+  conv2 = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), border_mode="valid")(conv2)
+  conv3 = Convolution2D(384, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")(conv2)
+  conv4 = convolution2Dgroup(2, 384, 3, 3)(conv3)
+  conv5 = convolution2Dgroup(2, 256, 3, 3)(conv4)
+  conv5 = MaxPooling2D(pool_size=(2, 2), strides=(2, 2), border_mode="valid")(conv5)
+  flat = Flatten()(conv5)
+  dense1 = Dense(4096, activation="relu")(flat)
+  dense1 = Dropout(0.5)(dense1)
+  dense2 = Dense(4096, activation="relu")(dense1)
+  dense2 = Dropout(0.95)(dense2)
+  output = Dense(1)(dense2)
+  model = Model(input=inputs, output=output)
   return model
 
-def get_my_model():
-  model = Sequential()
-  model.add(Convolution2D(3,1,1, border_mode='valid', init='he_normal', input_shape=(64, 64, 3)))
-  model.add(ELU())
-  model.add(Conv2D(100, 5, 5, border_mode='valid', activation='relu'))
-  model.add(MaxPooling2D(pool_size=(2,2)))
-  model.add(Conv2D(150, 3, 3, border_mode='valid', activation='relu'))
-  model.add(MaxPooling2D(pool_size=(2,2)))
-  model.add(Conv2D(250, 2, 2, border_mode='valid', activation='relu'))
-  model.add(MaxPooling2D(pool_size=(2,2)))
-  model.add(Flatten())
-  model.add(Dense(300, init='he_normal'))
-  model.add(ELU())
-  model.add(Dropout(0.5))
-  model.add(Dense(43, init='he_normal'))
-  model.add(ELU())
-  model.add(Dropout(0.5))
-  model.add(Dense(1, init='he_normal'))
-  return model
+  # model = Sequential()
+  # model.add(Convolution2D(96, 11, 11, subsample=(4, 4), border_mode="same", activation="relu", input_shape=(64, 64, 3))) # g1
+  # model.add(BatchNormalization())
+  # model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="valid"))
+  # model.add(Convolution2D(255, 5, 5, subsample=(1, 1), border_mode="same", activation="relu")) # g2
+  # model.add(BatchNormalization())
+  # model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="valid"))
+  # model.add(Convolution2D(384, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")) # g1
+  # model.add(Convolution2D(384, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")) # g2
+  # model.add(Convolution2D(256, 3, 3, subsample=(1, 1), border_mode="same", activation="relu")) # g2
+  # model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="valid"))
+  # model.add(Flatten())
+  # model.add(Dense(4096))
+  # model.add(Activation('relu'))
+  # model.add(Dropout(0.5))
+  # model.add(Dense(4096))
+  # model.add(Activation('relu'))
+  # model.add(Dropout(0.95))
+  # model.add(Dense(1))
+  # return model
+
 
 if __name__ == '__main__':
   # prepare data
@@ -205,7 +221,7 @@ if __name__ == '__main__':
   data = prepare_data(csv)
 
   # get model
-  model = get_comma_model()
+  model = get_gtanet_model()
   model.summary()
 
   # training
@@ -214,6 +230,7 @@ if __name__ == '__main__':
   SAMPLES = BATCH_SIZE * 200
   NB_VAL_SAMPLES = round(len(data) / BATCH_SIZE) * BATCH_SIZE
 
+  # lr = 2e-4
   model.compile(optimizer='adam', loss='mse')
   model.fit_generator(generate_train_batch(data, BATCH_SIZE), verbose=1, samples_per_epoch=SAMPLES, nb_epoch=EPOCH,
     validation_data=generate_valid_batch(data, BATCH_SIZE), nb_val_samples=NB_VAL_SAMPLES)

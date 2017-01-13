@@ -11,6 +11,10 @@ from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import Adam
 
+# Fix error with Keras and TensorFlow
+import tensorflow as tf
+tf.python.control_flow_ops = tf
+
 def rgb_clahe(bgr_img,limit=5,grid=4):
   b,g,r = cv2.split(bgr_img)
   clahe = cv2.createCLAHE(clipLimit=limit, tileGridSize=(grid,grid))
@@ -21,7 +25,8 @@ def rgb_clahe(bgr_img,limit=5,grid=4):
 
 def preprocess(img):
   roi = img[60:140, :, :]
-  clahe = rgb_clahe(roi)
+  # clahe = rgb_clahe(roi)
+  clahe = roi
   resize = cv2.resize(clahe, (64, 64), interpolation=cv2.INTER_AREA)
   return resize
 
@@ -54,9 +59,8 @@ def random_translation(image, steering, x_range=100, y_range=10, angle=.3):
 
 def get_augmented_data(row):
   camera, image, steering = random_camera(row)
-  if camera == 1:
-    image, steering = random_flip(image, steering)
-    image, steering = random_translation(image, steering)
+  # image, steering = random_flip(image, steering)
+  # image, steering = random_translation(image, steering)
   return preprocess(image), steering
 
 def generate_train_batch(data, batch_size):
@@ -94,8 +98,9 @@ def prepare_data(data):
   data = data[data.speed > 15]
   train_nonzero = data[data.steering != 0]
   train_zero = (data[data.steering == 0]).sample(frac=.1)
-  train = pd.concat([train_nonzero, train_zero], ignore_index=True)
-  return shuffle(train)
+  train = shuffle(pd.concat([train_nonzero, train_zero], ignore_index=True))
+  train, valid = train_test_split(train, test_size=0.2, random_state=1234)
+  return train, valid
 
 def get_nvidia_model():
   model = Sequential()
@@ -173,26 +178,28 @@ def get_gtanet_model():
 def main():
   # prepare data
   csv = read_csv('data/driving_log.csv')
-  data = prepare_data(csv)
+  train_data, valid_data = prepare_data(csv)
 
   # get model
   model = get_comma_model()
   model.summary()
 
   # training
-  BATCH_SIZE = 128
-  EPOCH = 5
-  SAMPLES = BATCH_SIZE * 200
-  NB_VAL_SAMPLES = round(len(data) / BATCH_SIZE) * BATCH_SIZE
+  BATCH_SIZE = 50
+  EPOCH = 10
+  SAMPLES = 20000
+  NB_VAL_SAMPLES = round(len(valid_data) / BATCH_SIZE) * BATCH_SIZE
 
   model.compile(optimizer=Adam(2e-4), loss='mse')
-  model.fit_generator(generate_train_batch(data, BATCH_SIZE), verbose=1, samples_per_epoch=SAMPLES, nb_epoch=EPOCH,
-    validation_data=generate_valid_batch(data, BATCH_SIZE), nb_val_samples=NB_VAL_SAMPLES)
+  history = model.fit_generator(generate_train_batch(train_data, BATCH_SIZE), verbose=1, samples_per_epoch=SAMPLES, nb_epoch=EPOCH,
+    validation_data=generate_valid_batch(valid_data, BATCH_SIZE), nb_val_samples=NB_VAL_SAMPLES)
+
+  print("Best val_loss: " + str(min(history.history['val_loss'])))
 
   # model save
-  model.save_weights('model.h5')
-  with open('model.json', 'w') as f:
-    f.write(model.to_json())
+  # model.save_weights('model.h5')
+  # with open('model.json', 'w') as f:
+  #   f.write(model.to_json())
 
 if __name__ == '__main__':
   main()

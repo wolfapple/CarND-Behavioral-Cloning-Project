@@ -10,12 +10,13 @@ from keras.layers import Dense, Dropout, Flatten, Lambda, ELU, Activation, Conv2
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import Adam
+from keras.callbacks import ModelCheckpoint
 
 # Fix error with Keras and TensorFlow
 import tensorflow as tf
 tf.python.control_flow_ops = tf
 
-def rgb_clahe(bgr_img,limit=5,grid=4):
+def rgb_clahe(bgr_img,limit=3,grid=8):
   b,g,r = cv2.split(bgr_img)
   clahe = cv2.createCLAHE(clipLimit=limit, tileGridSize=(grid,grid))
   b = clahe.apply(b)
@@ -25,12 +26,19 @@ def rgb_clahe(bgr_img,limit=5,grid=4):
 
 def preprocess(img):
   roi = img[60:140, :, :]
-  # clahe = rgb_clahe(roi)
-  clahe = roi
+  clahe = rgb_clahe(roi)
   resize = cv2.resize(clahe, (64, 64), interpolation=cv2.INTER_AREA)
+  resize = resize / 127.5 - 1.0
   return resize
 
-def random_camera(row, angle=.15):
+# def preprocess(img):
+#   roi = img[60:140, :, :]
+#   yuv = cv2.cvtColor(roi, cv2.COLOR_RGB2YUV)
+#   yuv[:,:,0] = cv2.equalizeHist(yuv[:,:,0])
+#   resize = cv2.resize(yuv, (64, 64), interpolation=cv2.INTER_AREA)
+#   return resize
+
+def random_camera(row, angle=.1):
   camera = np.random.randint(3)
   if camera == 0:
     image = mpimg.imread('data/'+row.left.strip())
@@ -59,8 +67,9 @@ def random_translation(image, steering, x_range=100, y_range=10, angle=.3):
 
 def get_augmented_data(row):
   camera, image, steering = random_camera(row)
-  # image, steering = random_flip(image, steering)
-  # image, steering = random_translation(image, steering)
+  image, steering = random_flip(image, steering)
+  if camera == 1:
+    image, steering = random_translation(image, steering)
   return preprocess(image), steering
 
 def generate_train_batch(data, batch_size):
@@ -74,7 +83,11 @@ def generate_train_batch(data, batch_size):
       image, steering = get_augmented_data(row)
       images[i] = image
       steerings[i] = steering
-      current = (current + 1) % total
+      if (current + 1) == total:
+        shuffle(data)
+        current = 0
+      else:
+        current += 1
     yield images, steerings
 
 def generate_valid_batch(data, batch_size):
@@ -88,7 +101,7 @@ def generate_valid_batch(data, batch_size):
       images[i] = preprocess(mpimg.imread('data/'+row.center.strip()))
       steerings[i] = row.steering
       current = (current + 1) % total
-    yield images, steerings  
+    yield images, steerings
 
 def read_csv(path):
   headers = ['center','left','right','steering','throttle','brake','speed']
@@ -104,9 +117,10 @@ def prepare_data(data):
 
 def get_nvidia_model():
   model = Sequential()
-  model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(64, 64, 3), output_shape=(64, 64, 3)))
+  model.add(BatchNormalization(input_shape=(64, 64, 3), axis=1))
+  # model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(64, 64, 3), output_shape=(64, 64, 3)))
   model.add(Convolution2D(3, 1, 1, border_mode='same'))
-  model.add(Convolution2D(24, 5, 5, init = 'he_normal', subsample= (2, 2), input_shape=(64, 64, 3)))
+  model.add(Convolution2D(24, 5, 5, init = 'he_normal', subsample= (2, 2)))
   model.add(ELU())
   model.add(Convolution2D(36, 5, 5, init = 'he_normal', subsample= (2, 2)))
   model.add(ELU())
@@ -120,8 +134,10 @@ def get_nvidia_model():
   model.add(Dense(1164, init = 'he_normal'))
   model.add(ELU())
   model.add(Dense(100, init = 'he_normal'))
+  model.add(Dropout(0.5))
   model.add(ELU())
   model.add(Dense(50, init = 'he_normal'))
+  model.add(Dropout(0.5))
   model.add(ELU())
   model.add(Dense(10, init = 'he_normal'))
   model.add(ELU())
@@ -131,7 +147,7 @@ def get_nvidia_model():
 def get_comma_model():
   model = Sequential()
   model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(64, 64, 3), output_shape=(64, 64, 3)))
-  model.add(Convolution2D(3, 1, 1, border_mode='same'))
+  # model.add(Convolution2D(3, 1, 1, border_mode='same'))
   model.add(Convolution2D(16, 8, 8, subsample=(4, 4), border_mode="same"))
   model.add(ELU())
   model.add(Convolution2D(32, 5, 5, subsample=(2, 2), border_mode="same"))
@@ -175,31 +191,79 @@ def get_gtanet_model():
   model = Model(input=inputs, output=output)
   return model
 
+def get_vgg_model():
+  model = Sequential()
+  model.add(Convolution2D(64, 3, 3, border_mode='valid', input_shape=(64, 64, 3)))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(64, 3, 3))
+  model.add(Activation('relu'))
+  model.add(MaxPooling2D((2,2), strides=(2,2)))
+  model.add(Dropout(0.25))
+
+  model.add(Convolution2D(128, 3, 3))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(128, 3, 3))
+  model.add(Activation('relu'))
+  model.add(MaxPooling2D((2,2), strides=(2,2)))
+  model.add(Dropout(0.25))
+
+  model.add(Convolution2D(256, 3, 3))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(256, 3, 3))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(256, 3, 3))
+  model.add(Activation('relu'))
+  model.add(MaxPooling2D((2,2), strides=(2,2)))
+  model.add(Dropout(0.25))
+
+  model.add(Convolution2D(512, 3, 3))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(512, 3, 3))
+  model.add(Activation('relu'))
+  model.add(Convolution2D(512, 3, 3))
+  model.add(Activation('relu'))
+  model.add(MaxPooling2D((2,2), strides=(2,2)))
+  model.add(Dropout(0.25))
+
+  model.add(Flatten())
+  model.add(Dense(2000))
+  model.add(Activation('relu'))
+  model.add(Dropout(0.5))
+  model.add(Dense(2000))
+  model.add(Activation('relu'))
+  model.add(Dropout(0.5))
+  model.add(Dense(1))
+
+  return model
+
 def main():
   # prepare data
   csv = read_csv('data/driving_log.csv')
   train_data, valid_data = prepare_data(csv)
 
   # get model
-  model = get_comma_model()
+  model = get_nvidia_model()
   model.summary()
 
   # training
   BATCH_SIZE = 50
-  EPOCH = 10
+  EPOCH = 5
   SAMPLES = 20000
   NB_VAL_SAMPLES = round(len(valid_data) / BATCH_SIZE) * BATCH_SIZE
 
-  model.compile(optimizer=Adam(2e-4), loss='mse')
+  model.compile(optimizer=Adam(1e-4), loss='mse')
   history = model.fit_generator(generate_train_batch(train_data, BATCH_SIZE), verbose=1, samples_per_epoch=SAMPLES, nb_epoch=EPOCH,
-    validation_data=generate_valid_batch(valid_data, BATCH_SIZE), nb_val_samples=NB_VAL_SAMPLES)
+    validation_data=generate_valid_batch(valid_data, BATCH_SIZE), nb_val_samples=NB_VAL_SAMPLES,
+    callbacks=[ModelCheckpoint(filepath="best_model.h5", verbose=1, save_best_only=True)])
 
   print("Best val_loss: " + str(min(history.history['val_loss'])))
 
   # model save
-  # model.save_weights('model.h5')
-  # with open('model.json', 'w') as f:
-  #   f.write(model.to_json())
+  model.save_weights('model.h5')
+  with open('model.json', 'w') as f:
+    f.write(model.to_json())
+  with open('best_model.json', 'w') as f:
+    f.write(model.to_json())
 
 if __name__ == '__main__':
   main()

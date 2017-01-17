@@ -62,12 +62,12 @@ def main():
   model.summary()
 
   # generators for training and validation
-  train_gen = util.next_batch()
-  validation_gen = util.next_batch()
+  BATCH = 64
+  train_gen = util.next_batch(BATCH)
+  validation_gen = util.next_batch(BATCH)
 
   # training
   EPOCHS = 8
-  BATCH = 64
   TRAINS = 20032
   VALIDS = 6400
   model.compile(optimizer=Adam(1e-4), loss="mse")

@@ -5,11 +5,28 @@ import numpy as np
 import pandas as pd
 import matplotlib.image as mpimg
 
-def roi(image, top=60, bottom=140):
+def roi(image, top, bottom):
   return image[top:bottom, :]
 
-def resize(image, dim=(64, 64)):
+def resize(image, dim):
   return cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+
+def preprocess(image, top=60, bottom=140, dim=(64, 64)):
+  return resize(roi(image, top, bottom), dim)
+
+def random_camera(row, angle):
+  camera = np.random.randint(0, 3)
+  if camera == 0:
+    image = mpimg.imread('data/' + row.left.strip())
+    steering = row.steering + angle
+  elif camera == 1:
+    image = mpimg.imread('data/' + row.center.strip())
+    steering = row.steering
+  else:
+    image = mpimg.imread('data/' + row.right.strip())
+    steering = row.steering - angle
+
+  return image, steering
 
 def random_flip(image, steering):
   if np.random.binomial(1, 0.5):
@@ -24,7 +41,7 @@ def adjust_gamma(image):
                     for i in np.arange(0, 256)]).astype("uint8")
   return cv2.LUT(image, table)
 
-def random_shear(image, steering, shear_range=200):
+def random_shear(image, steering, shear_range):
   rows, cols, _ = image.shape
   dx = np.random.randint(-shear_range, shear_range + 1)
   random_point = [cols / 2 + dx, rows / 2]
@@ -35,51 +52,32 @@ def random_shear(image, steering, shear_range=200):
   image = cv2.warpAffine(image, M, (cols, rows), borderMode=1)  
   return image, steering + dsteering
 
-def get_augmented_image(image, steering):
+def random_bumpy(image, y_range=40):
+  rows, cols, _ = image.shape
+  dy = (y_range * np.random.uniform()) - (y_range / 2)
+  M = np.float32([[1, 0, 0], [0, 1, dy]])
+  return cv2.warpAffine(image, M, (cols, rows))
+
+def get_augmented_data(row):
+  image, steering = random_camera(row, angle=0.229)
   if np.random.binomial(1, 0.9):
-    image, steering = random_shear(image, steering)
+    image, steering = random_shear(image, steering, shear_range=200)
   image, steering = random_flip(image, steering)
   image = adjust_gamma(image)
-  image = roi(image)
-  image = resize(image)
+  # image = random_bumpy(image)
   return image, steering
 
-def get_next_image_files(batch_size=64):
-  STEERING_COEFFICIENT = 0.229
-  data = pd.read_csv('data/driving_log.csv')
-  num_of_img = len(data)
-  rnd_indices = np.random.randint(0, num_of_img, batch_size)
-
-  image_files_and_angles = []
-  for index in rnd_indices:
-    rnd_image = np.random.randint(0, 3)
-    if rnd_image == 0:
-      img = data.iloc[index]['left'].strip()
-      angle = data.iloc[index]['steering'] + STEERING_COEFFICIENT
-      image_files_and_angles.append((img, angle))
-
-    elif rnd_image == 1:
-      img = data.iloc[index]['center'].strip()
-      angle = data.iloc[index]['steering']
-      image_files_and_angles.append((img, angle))
-    else:
-      img = data.iloc[index]['right'].strip()
-      angle = data.iloc[index]['steering'] - STEERING_COEFFICIENT
-      image_files_and_angles.append((img, angle))
-
-  return image_files_and_angles
-
 def next_batch(batch_size=64):
+  data = pd.read_csv('data/driving_log.csv')
   while True:
     images = []
     steerings = []
-    images = get_next_image_files(batch_size)
-    for img_file, angle in images:
-      raw_image = mpimg.imread('data/' + img_file)
-      raw_angle = angle
-      new_image, new_angle = get_augmented_image(raw_image, raw_angle)
-      images.append(new_image)
-      steerings.append(new_angle)
+    random_indices = np.random.randint(0, len(data), batch_size)
+    for idx in random_indices:
+      row = data.iloc[idx]
+      new_image, new_steering = get_augmented_data(row)
+      images.append(preprocess(new_image))
+      steerings.append(new_steering)
 
     yield np.array(images), np.array(steerings)
 

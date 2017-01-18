@@ -1,4 +1,4 @@
-from keras.layers import Dense, Flatten, Lambda, Activation, MaxPooling2D
+from keras.layers import Dense, Flatten, Lambda, PReLU, MaxPooling2D
 from keras.layers.convolutional import Convolution2D
 from keras.models import Sequential
 from keras.optimizers import Adam
@@ -16,42 +16,42 @@ def get_nvidia_model():
   model.add(Lambda(lambda x: x / 127.5 - 1.0, input_shape=(64, 64, 3)))
 
   # convolutional and maxpooling layers
-  model.add(Convolution2D(24, 5, 5, border_mode='same', subsample=(2, 2)))
-  model.add(Activation('relu'))
+  model.add(Convolution2D(24, 5, 5, border_mode='same', subsample=(2, 2), init='he_normal'))
+  model.add(PReLU())
   model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
 
-  model.add(Convolution2D(36, 5, 5, border_mode='same', subsample=(2, 2)))
-  model.add(Activation('relu'))
+  model.add(Convolution2D(36, 5, 5, border_mode='same', subsample=(2, 2), init='he_normal'))
+  model.add(PReLU())
   model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
 
-  model.add(Convolution2D(48, 5, 5, border_mode='same', subsample=(2, 2)))
-  model.add(Activation('relu'))
+  model.add(Convolution2D(48, 5, 5, border_mode='same', subsample=(2, 2), init='he_normal'))
+  model.add(PReLU())
   model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
 
-  model.add(Convolution2D(64, 3, 3, border_mode='same', subsample=(1, 1)))
-  model.add(Activation('relu'))
+  model.add(Convolution2D(64, 3, 3, border_mode='same', subsample=(1, 1), init='he_normal'))
+  model.add(PReLU())
   model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
 
-  model.add(Convolution2D(64, 3, 3, border_mode='same', subsample=(1, 1)))
-  model.add(Activation('relu'))
+  model.add(Convolution2D(64, 3, 3, border_mode='same', subsample=(1, 1), init='he_normal'))
+  model.add(PReLU())
   model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
 
   model.add(Flatten())
 
   # fully connected layers
-  model.add(Dense(1164))
-  model.add(Activation('relu'))
+  model.add(Dense(1164, init='he_normal'))
+  model.add(PReLU())
 
-  model.add(Dense(100))
-  model.add(Activation('relu'))
+  model.add(Dense(100, init='he_normal'))
+  model.add(PReLU())
 
-  model.add(Dense(50))
-  model.add(Activation('relu'))
+  model.add(Dense(50, init='he_normal'))
+  model.add(PReLU())
 
-  model.add(Dense(10))
-  model.add(Activation('relu'))
+  model.add(Dense(10, init='he_normal'))
+  model.add(PReLU())
 
-  model.add(Dense(1))
+  model.add(Dense(1, init='he_normal'))
 
   return model
 
@@ -62,8 +62,8 @@ def main():
 
   # generators for training and validation
   BATCH = 64
-  train_gen = util.next_batch(BATCH)
-  validation_gen = util.next_batch(BATCH)
+  train_gen = util.next_train_batch(BATCH)
+  validation_gen = util.next_valid_batch(BATCH)
 
   # training
   EPOCHS = 8

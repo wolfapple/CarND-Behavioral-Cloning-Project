@@ -13,7 +13,7 @@ def resize(image, dim):
 def preprocess(image, top=60, bottom=140, dim=(64, 64)):
   return resize(roi(image, top, bottom), dim)
 
-def random_camera(row, angle=0.23):
+def random_camera(row, angle=0.24):
   camera = np.random.randint(0, 3)
   if camera == 0:
     image_path = row.left.strip()
@@ -53,18 +53,18 @@ def random_shear(image, steering, shear_range=200):
   image = cv2.warpAffine(image, M, (cols, rows), borderMode=1)  
   return image, steering + dsteering
 
-def random_bumpy(image, y_range=40):
+def random_bumpy(image, y_range=20):
   rows, cols, _ = image.shape
   dy = (y_range * np.random.uniform()) - (y_range / 2)
   M = np.float32([[1, 0, 0], [0, 1, dy]])
   return cv2.warpAffine(image, M, (cols, rows))
 
-def get_augmented_data(row):
-  image, steering = random_camera(row)
+def get_augmented_data(image, steering):
   if np.random.binomial(1, 0.9):
     image, steering = random_shear(image, steering)
   image, steering = random_flip(image, steering)
   image = adjust_gamma(image)
+  image = preprocess(image)
   image = random_bumpy(image)
   return image, steering
 
@@ -72,7 +72,23 @@ def read_csv(path):
   headers = ['center', 'left', 'right', 'steering', 'throttle', 'brake', 'speed']
   return pd.read_csv(path, names=headers, skiprows=1)
 
-def next_batch(batch_size):
+def next_train_batch(batch_size):
+  data = read_csv('data/driving_log.csv')
+  total = len(data)
+  while True:
+    images = []
+    steerings = []
+    random_indices = np.random.randint(0, total, batch_size)
+    for idx in random_indices:
+      row = data.iloc[idx]
+      image, steering = random_camera(row)
+      image, steering = get_augmented_data(image, steering)
+      images.append(image)
+      steerings.append(steering)
+
+    yield np.array(images), np.array(steerings)
+
+def next_valid_batch(batch_size):
   data = read_csv('data/driving_log.csv')
   total = len(data)
   current = 0
@@ -81,12 +97,12 @@ def next_batch(batch_size):
     steerings = []
     for i in range(batch_size):
       row = data.iloc[current]
-      new_image, new_steering = get_augmented_data(row)
-      images.append(preprocess(new_image))
-      steerings.append(new_steering)
+      image, steering = random_camera(row)
+      images.append(preprocess(image))
+      steerings.append(steering)
       current = (current + 1) % total
 
-    yield np.array(images), np.array(steerings)
+    yield np.array(images), np.array(steerings)  
 
 def save_model(model):
   safe_delete('model.json')

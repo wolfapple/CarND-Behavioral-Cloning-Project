@@ -25,7 +25,9 @@ def random_camera(row, angle=0.229):
     image_path = row.right.strip()
     steering = row.steering - angle
 
-  return mpimg.imread('data/' + image_path), steering
+  image = mpimg.imread('data/' + image_path[image_path.find('IMG'):])
+
+  return image, steering
 
 def random_flip(image, steering):
   if np.random.binomial(1, 0.5):
@@ -67,18 +69,23 @@ def get_augmented_data(row):
   image = random_bumpy(image)
   return image, steering
 
+def read_csv(path):
+  headers = ['center', 'left', 'right', 'steering', 'throttle', 'brake', 'speed']
+  return pd.read_csv(path, names=headers, skiprows=1)
+
 def next_batch(batch_size):
-  data = pd.read_csv('data/driving_log.csv')
+  data = read_csv('data/driving_log.csv')
   total = len(data)
+  current = 0
   while True:
     images = []
     steerings = []
-    random_indices = np.random.randint(0, total, batch_size)
-    for idx in random_indices:
-      row = data.iloc[idx]
+    for i in range(batch_size):
+      row = data.iloc[current]
       new_image, new_steering = get_augmented_data(row)
       images.append(new_image)
       steerings.append(new_steering)
+      current = (current + 1) % total
 
     yield np.array(images), np.array(steerings)
 

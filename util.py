@@ -102,17 +102,4 @@ def next_valid_batch(batch_size):
       steerings.append(steering)
       current = (current + 1) % total
 
-    yield np.array(images), np.array(steerings)  
-
-def save_model(model):
-  safe_delete('model.json')
-  safe_delete('model.h5')
-
-  with open('model.json', 'w') as outfile:
-    outfile.write(model.to_json())
-
-  model.save_weights('model.h5')
-
-def safe_delete(file):
-  if os.path.exists(file):
-    os.remove(file)
+    yield np.array(images), np.array(steerings)

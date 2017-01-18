@@ -1,8 +1,7 @@
-from keras.layers import Dense, Flatten, Lambda, Activation, MaxPooling2D, Dropout
+from keras.layers import Dense, Flatten, Lambda, Activation, MaxPooling2D
 from keras.layers.convolutional import Convolution2D
 from keras.models import Sequential
 from keras.optimizers import Adam
-from keras.callbacks import ModelCheckpoint, EarlyStopping
 
 # Fix error with Keras and TensorFlow
 import tensorflow as tf

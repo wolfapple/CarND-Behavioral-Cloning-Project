@@ -13,7 +13,7 @@ def resize(image, dim):
 def preprocess(image, top=60, bottom=140, dim=(64, 64)):
   return resize(roi(image, top, bottom), dim)
 
-def random_camera(row, angle=0.229):
+def random_camera(row, angle=0.23):
   camera = np.random.randint(0, 3)
   if camera == 0:
     image_path = row.left.strip()
@@ -53,7 +53,7 @@ def random_shear(image, steering, shear_range=200):
   image = cv2.warpAffine(image, M, (cols, rows), borderMode=1)  
   return image, steering + dsteering
 
-def random_bumpy(image, y_range=15):
+def random_bumpy(image, y_range=40):
   rows, cols, _ = image.shape
   dy = (y_range * np.random.uniform()) - (y_range / 2)
   M = np.float32([[1, 0, 0], [0, 1, dy]])
@@ -65,7 +65,6 @@ def get_augmented_data(row):
     image, steering = random_shear(image, steering)
   image, steering = random_flip(image, steering)
   image = adjust_gamma(image)
-  image = preprocess(image)
   image = random_bumpy(image)
   return image, steering
 
@@ -83,7 +82,7 @@ def next_batch(batch_size):
     for i in range(batch_size):
       row = data.iloc[current]
       new_image, new_steering = get_augmented_data(row)
-      images.append(new_image)
+      images.append(preprocess(new_image))
       steerings.append(new_steering)
       current = (current + 1) % total
 

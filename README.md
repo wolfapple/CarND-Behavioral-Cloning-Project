@@ -91,6 +91,16 @@ The roads on the second track have hills and downhill, and the car often jumps w
 [이미지 첨부]
 
 ## Data Generators
+In this training, I used a generator, which randomly samples the set of images from csv file. As mentioned earlier, because there is a lot of data with a steering angle of 0, I removed this bias by randomly extracting the data. These extracted images are transformed using the augmentation techniques discussed above and then fed to the model.
+
+I also used a generator for validation. This generator receives data for validation and returns the corresponding center camera image and steering angle. The validation data was created by leaving only 10% of the row with zero steering angle in the training data.
+
+## Training parameters
+epoch, batch size, trains, validations, Adam optimizer, learning rate
+
+## Callbacks
+ModelCheckPoint - save best only
+EarlyStopping - patience 3
 
 # 6. Simulation
 

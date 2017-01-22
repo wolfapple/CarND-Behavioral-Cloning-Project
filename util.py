@@ -13,8 +13,7 @@ def resize(image, dim):
 def preprocess(image, top=60, bottom=140, dim=(64, 64)):
   return resize(roi(image, top, bottom), dim)
 
-def random_camera(row, angle=0.24):
-  camera = np.random.randint(0, 3)
+def get_data_from_camera(row, camera, angle=0.24):
   if camera == 0:
     image_path = row.left.strip()
     steering = row.steering + angle
@@ -27,6 +26,11 @@ def random_camera(row, angle=0.24):
 
   image = mpimg.imread('data/' + image_path[image_path.find('IMG'):])
 
+  return image, steering
+
+def random_camera(row):
+  camera = np.random.randint(0, 3)
+  image, steering = get_data_from_camera(row, camera)
   return image, steering
 
 def random_flip(image, steering):
@@ -72,8 +76,14 @@ def read_csv(path):
   headers = ['center', 'left', 'right', 'steering', 'throttle', 'brake', 'speed']
   return pd.read_csv(path, names=headers, skiprows=1)
 
-def next_train_batch(batch_size):
-  data = read_csv('data/driving_log.csv')
+def prepare_data():
+  train = read_csv('data/driving_log.csv')
+  train_nonzero = train[train.steering != 0]
+  train_zero = train[train.steering == 0]
+  valid = pd.concat([train_nonzero, train_zero.sample(frac=0.1)], ignore_index=True)
+  return train, valid
+
+def next_train_batch(data, batch_size):
   total = len(data)
   while True:
     images = []
@@ -88,8 +98,7 @@ def next_train_batch(batch_size):
 
     yield np.array(images), np.array(steerings)
 
-def next_valid_batch(batch_size):
-  data = read_csv('data/driving_log.csv')
+def next_valid_batch(data, batch_size):
   total = len(data)
   current = 0
   while True:
@@ -97,7 +106,7 @@ def next_valid_batch(batch_size):
     steerings = []
     for i in range(batch_size):
       row = data.iloc[current]
-      image, steering = random_camera(row)
+      image, steering = get_data_from_camera(row, 1)
       images.append(preprocess(image))
       steerings.append(steering)
       current = (current + 1) % total

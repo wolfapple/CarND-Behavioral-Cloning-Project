@@ -16,7 +16,7 @@ When you first run the simulator, you’ll see a configuration screen asking wha
 
 ### Autonomous mode
   * Set up your development environment with the environment.yml
-  * Run the server : `python drive.py mode.json`
+  * Run the server : `python drive.py model.json`
   * You should see the car move around
 
 # 3. Data Collection
@@ -41,9 +41,14 @@ My convolutional neural network architecture was inspired by NVIDIA's End to End
     Lambda(lambda x: x / 127.5 - 1.0, input_shape=(64, 64, 3))
     ```
 
-  * 트레이닝 시간 단축, weight 파일 용량 축소, 첫3개 valid, 마지막2개 maxpooling
-  * PReLU 사용, he_normal, he_unicorm init
-  * 첫 두개의 fc에다 dropout 0.5 적용
+  * I added a pooling layer to the last two convolution layers. Its function is to progressively reduce the spatial size of the representation to reduce the amount of parameters and computation. Therefore, it is possible to control overfitting.
+  * [Delving Deep into Rectifiers](https://arxiv.org/abs/1502.01852)
+    * All ReLUs replaced by PReLUs
+    * Use 'he_normal' initializer
+    * Dropout(50%) is used in the first two fc layers.
+  * [Batch Normalization](https://arxiv.org/abs/1502.03167)
+    * 
+  * tahn activation
 
 The main difference between our model and the NVIDIA mode is than we did use MaxPooling layers just after each Convolutional Layer in order to cut down training time. For more details about our network architecture please refer following figure.
 

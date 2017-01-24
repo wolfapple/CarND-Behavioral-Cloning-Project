@@ -2,7 +2,3 @@ data
 .DS_Store
 .ipynb_checkpoints
 __pycache__
-model.h5
-model.json
-best_model.h5
-best_model.json

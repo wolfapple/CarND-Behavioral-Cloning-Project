@@ -79,10 +79,11 @@ My convolutional neural network architecture was inspired by NVIDIA's End to End
   * Reference : [Delving Deep into Rectifiers](https://arxiv.org/abs/1502.01852)
     * All ReLUs replaced by PReLUs
     * Use 'he_normal' initializer
-    * Dropout(50%) is used in the first two fc layers.
   
   * Reference : [Batch Normalization](https://arxiv.org/abs/1502.03167)
     * Batch normalization was added before all PReLUs.
+
+  * Batch Normalization has its own regularization effect. So, I added Dropout(80%) in the first two fully connected layers.
 
 The main difference between our model and the NVIDIA mode is than we did use MaxPooling layers just after each Convolutional Layer in order to cut down training time. For more details about our network architecture please refer following figure.
 
@@ -147,7 +148,7 @@ In this training, I used a generator, which randomly samples the set of images f
 I also used a generator for validation. This generator receives data for validation and returns the corresponding center camera image and steering angle. The validation data was created by leaving only 10% of the row with zero steering angle in the training data.
 
 ## Training parameters
-* Adam optimizer with a learning rate of 0.002
+* Adam optimizer with a learning rate of 0.01
   * One of the advantages of Batch Normalization is that it can achieve high learning rate.
 * 128 batch size
 * 5 training epochs

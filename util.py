@@ -13,7 +13,7 @@ def resize(image, dim):
 def preprocess(image, top=60, bottom=140, dim=(64, 64)):
   return resize(roi(image, top, bottom), dim)
 
-def get_data_from_camera(row, camera, angle=0.24):
+def get_data_from_camera(row, camera, angle=0.23):
   if camera == 0:
     image_path = row.left.strip()
     steering = row.steering + angle

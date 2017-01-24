@@ -72,14 +72,17 @@ My convolutional neural network architecture was inspired by NVIDIA's End to End
     Lambda(lambda x: x / 127.5 - 1.0, input_shape=(64, 64, 3))
     ```
 
-  * I added a pooling layer to the last two convolution layers. Its function is to progressively reduce the spatial size of the representation to reduce the amount of parameters and computation. Therefore, it is possible to control overfitting.
-  * [Delving Deep into Rectifiers](https://arxiv.org/abs/1502.01852)
+  * I added a pooling layer to the last two convolution layers. Its function is to progressively reduce the spatial size of the representation to reduce the amount of parameters and computation. Therefore, it is possible to control overfitting. At first I added it to all convolution layers, but the size of the weights file was so large that I only added it to the last two layers.
+
+  * The steering angle to be predicted is a value between -1 and 1 which is symmetric to zero, and a value close to 0 will often appear. Considering this feature, tahn was considered suitable as the activation function of the last output layer.
+
+  * Reference : [Delving Deep into Rectifiers](https://arxiv.org/abs/1502.01852)
     * All ReLUs replaced by PReLUs
     * Use 'he_normal' initializer
     * Dropout(50%) is used in the first two fc layers.
-  * [Batch Normalization](https://arxiv.org/abs/1502.03167)
-    * 
-  * tahn activation
+  
+  * Reference : [Batch Normalization](https://arxiv.org/abs/1502.03167)
+    * Batch normalization was added before all PReLUs.
 
 The main difference between our model and the NVIDIA mode is than we did use MaxPooling layers just after each Convolutional Layer in order to cut down training time. For more details about our network architecture please refer following figure.
 
@@ -89,12 +92,12 @@ The dataset consists of 8036 rows. Since each row contains images corresponding 
 
 But, training data is very unbalanced. The 1st track contains a lot of shallow turns and straight road segments. So, the majority of the dataset's steering angles are zeros. Huge number of zeros is definitely going to bias our model towards predicting zeros.
 
-[histogram 하나 첨부]
+![Steering Histogram](./img/steering_hist.png)
 
 ## Data preprocessing
 I removed the useless part of the image(past the horizon, hood of the car) and kept track. And I resized the resulting image to a 64x64 in order to reduce training time. Resized images are fed into the neural network.
 
-[preprocess된 이미지 하나 첨부]
+<img src="./img/preprocess.png" alt="preprocess" width="320" />
 
 ## Data Augmentation
 Augmentation refers to the process of generating new training data from a smaller data set. This helps us extract as much information from data as possible.
@@ -104,52 +107,59 @@ Since I wanted to proceed with only the given data set if possible, I used some 
 ### Randomly choosing camera
 During the training, the simulator captures data from left, center, and right cameras. Using images taken from left and right cameras to simulate and recover when the car drifts off the center of the road. My approach was to add/substract a static offset from the angle when choosing the left/right camera.
 
-[이미지 세개랑 각도 테이블 첨부]
+Left | Center | Right
+-----|--------|------
+![left](./img/left.png) | ![center](./img/center.png) | ![right](./img/right.png)
 
 ### Random shear
 I applied random shear operation. The image is sheared horizontally to simulate a bending road. The pixels at the bottom of the image were held fixed while the top row was moved randomly to the left or right. The steering angle was changed proportionally to the shearing angle. However, I choose images with 0.9 probability for the random shearing process. I kept 10% of original images in order to help the car to navigate in the training track.
 
-[sheared 이미지 첨부]
+Before | After
+-------|-------
+![before](./img/before_shear.png) | ![after](./img/after_shear.png)
 
 ### Random flip
 Each image was randomly horizontally flipped and negate the steering angle with equal probability. I think, this will have the effect of evenly turning left and right.
 
-[이미지 첨부]
+Before | After
+-------|-------
+![before](./img/before_flip.png) | ![after](./img/after_flip.png)
 
 ### Random gamma correction
 Chaging brightness to simulate differnt lighting conditions. Random gamma correction is used as an alternative method changing the brightness of training images.
 
-[이미지 첨부]
+Before | After
+-------|-------
+![before](./img/before_gamma.png) | ![after](./img/after_gamma.png)
 
 ### Random shift vertically
 The roads on the second track have hills and downhill, and the car often jumps while driving. To simulate such a road situation, I shifted the image vertically randomly. This work was applied after image preprocessing.
 
-[이미지 첨부]
+Before | After
+-------|-------
+![before](./img/before_bumpy.png) | ![after](./img/after_bumpy.png)
 
 ## Data Generators
 In this training, I used a generator, which randomly samples the set of images from csv file. As mentioned earlier, because there is a lot of data with a steering angle of 0, I removed this bias by randomly extracting the data. These extracted images are transformed using the augmentation techniques discussed above and then fed to the model.
 
+![Steering Histogram](./img/train_steering_hist.png)
+
 I also used a generator for validation. This generator receives data for validation and returns the corresponding center camera image and steering angle. The validation data was created by leaving only 10% of the row with zero steering angle in the training data.
 
 ## Training parameters
-epoch, batch size, trains, validations, Adam optimizer, learning rate
+* Adam optimizer with a learning rate of 0.002
+  * One of the advantages of Batch Normalization is that it can achieve high learning rate.
+* 128 batch size
+* 5 training epochs
+  * Because I used my desktop for training, I tried to use as many ways as possible to reduce my training time.
 
-## Callbacks
-ModelCheckPoint - save best only
-EarlyStopping - patience 3
+# 6. Driving
+Run drive.py using the saved model.
+```python
+python drive.py model.json
+```
+* It receives the image of the central camera from the simulator, preprocesses it, and predicts the steering angle.
+* Returns the predicted angle and throttle again.
+* The throttle adjusted to 0.5 to climb the hill of track 2.
 
-# 6. Simulation
-
-# 7. Evaluation
-
-# 8. Conclusions
-
-The README thoroughly discusses the approach taken for deriving and designing a model architecture fit
-for solving the given problem.
-
-The README provides sufficient details of the characteristics and qualities of the architecture,
-such as the type of model used, the number of layers, the size of each layer.
-Visualizations emphasizing particular qualities of the architecture are encouraged.
-
-The README describes how the model was trained and what the characteristics of the dataset are.
-Information such as how the dataset was generated and examples of images from the dataset should be included.
+# 7. Conclusions

@@ -163,3 +163,4 @@ python drive.py model.json
 * The throttle adjusted to 0.5 to climb the hill of track 2.
 
 # 7. Conclusions
+It was a fun but difficult project. The concept of data augmentation was not difficult because of previous project experience, and the use of generators was quickly becoming familiar. The nvidia model worked better than I expected, but it was pretty hard to get there a bit further. I have repeated various experiments and have reviewed several papers, but it was not as easy as I thought to improve the results. Aboeve all, I was embarrassed that the smaller val_loss did not seem to guarantee a smoother ride.

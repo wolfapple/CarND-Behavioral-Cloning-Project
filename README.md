@@ -85,8 +85,6 @@ My convolutional neural network architecture was inspired by NVIDIA's End to End
 
   * Batch Normalization has its own regularization effect. So, I added Dropout(80%) in the first two fully connected layers.
 
-The main difference between our model and the NVIDIA mode is than we did use MaxPooling layers just after each Convolutional Layer in order to cut down training time. For more details about our network architecture please refer following figure.
-
 # 5. Training
 ## Data Description
 The dataset consists of 8036 rows. Since each row contains images corresponding to three cameras on the left, right, and center, a total of 24,108 images exist.
@@ -162,6 +160,8 @@ python drive.py model.json
 * It receives the image of the central camera from the simulator, preprocesses it, and predicts the steering angle.
 * Returns the predicted angle and throttle again.
 * The throttle adjusted to 0.5 to climb the hill of track 2.
+
+In my desktop environment, when the simulator was run with high graphics quality, the steering angle prediction slowed down and the car moved around occasionally. So when I run the simulator, I choose the graphics quality as Fastest.
 
 # 7. Conclusions
 It was a fun but difficult project. The concept of data augmentation was not difficult because of previous project experience, and the use of generators was quickly becoming familiar. The nvidia model worked better than I expected, but it was pretty hard to get there a bit further. I have repeated various experiments and have reviewed several papers, but it was not as easy as I thought to improve the results. Aboeve all, I was embarrassed that the smaller val_loss did not seem to guarantee a smoother ride.

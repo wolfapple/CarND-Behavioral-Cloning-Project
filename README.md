@@ -163,5 +163,9 @@ python drive.py model.json
 
 In my desktop environment, when the simulator was run with high graphics quality, the steering angle prediction slowed down and the car moved around occasionally. So when I run the simulator, I choose the graphics quality as Fastest.
 
+Track 1 | Track 2
+--------|--------
+![track1](./img/track_one.gif) | ![track2](./img/track_two.gif)
+
 # 7. Conclusions
 It was a fun but difficult project. The concept of data augmentation was not difficult because of previous project experience, and the use of generators was quickly becoming familiar. The nvidia model worked better than I expected, but it was pretty hard to get there a bit further. I have repeated various experiments and have reviewed several papers, but it was not as easy as I thought to improve the results. Aboeve all, I was embarrassed that the smaller val_loss did not seem to guarantee a smoother ride.
